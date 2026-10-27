@@ -43,8 +43,12 @@ function seed(){
    {id:uid(),name:"5G field guide",leftOff:"",nodes:[]},
   ],
   misc:[],
+  brainDump:[],
+  garden:{date:null,flowers:[]},
+  nextStart:null,
+  silencedDate:null,
   selected:null,
-  settings:{work:40,brk:10,hyd:30,eye:20},
+  settings:{work:40,brk:10,hyd:30,eye:20,autoBreak:true},
   logs:{}
  };
 }
@@ -52,8 +56,11 @@ let S;
 try{ if(window.HANAMI_INIT){ S=window.HANAMI_INIT; } else { const raw=localStorage.getItem(KEY); S=raw?JSON.parse(raw):seed(); } }catch(e){ S=seed(); }
 // migrate older saves
 if(!Array.isArray(S.misc)) S.misc=[];
+if(!Array.isArray(S.brainDump)) S.brainDump=[];
+if(!S.garden||typeof S.garden!=="object") S.garden={date:null,flowers:[]};
 if(!S.logs) S.logs={};
-if(!S.settings) S.settings={work:40,brk:10,hyd:30,eye:20};
+if(!S.settings) S.settings={work:40,brk:10,hyd:30,eye:20,autoBreak:true};
+if(S.settings.autoBreak===undefined) S.settings.autoBreak=true;
 if(!Array.isArray(S.projects)) S.projects=[];
 if(!S.selected && S.projects[0]) S.selected=S.projects[0].id;
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} try{ if(window.hanamiAPI) window.hanamiAPI.save(S); }catch(e){} }
@@ -62,9 +69,52 @@ const $=s=>document.querySelector(s);
 const el=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e;};
 function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
-let navStack=[];
+let navStack=[], renamingId=null;
 function go(sel){ if(S.selected!==sel){ navStack.push(S.selected); } S.selected=sel; save(); renderAll(); }
 function back(){ if(navStack.length){ S.selected=navStack.pop(); save(); renderAll(); } }
+
+/* ---------------- daily garden ---------------- */
+const FLOWERS=["iris","hyacinth","lily","plum","azalea","wish"];
+function gardenEnsure(){ if(!S.garden||S.garden.date!==todayStr()){ S.garden={date:todayStr(),flowers:[]}; } }
+function makeFlowerSpec(){
+ return { type:FLOWERS[Math.floor(Math.random()*FLOWERS.length)], side:Math.random()<0.5?"bottom":"top",
+   x:+(3+Math.random()*93).toFixed(1), scale:+(0.75+Math.random()*0.55).toFixed(2),
+   rot:+((Math.random()-0.5)*16).toFixed(1), delay:+(Math.random()*5).toFixed(1) };
+}
+function petals5(cx,cy,r,col){ let s=""; for(let i=0;i<5;i++){ s+=`<ellipse transform="rotate(${i*72} ${cx} ${cy})" cx="${cx}" cy="${(cy-r*0.6).toFixed(1)}" rx="${(r*0.42).toFixed(1)}" ry="${(r*0.6).toFixed(1)}" fill="${col}"/>`; } return s; }
+function flowerSVG(type,size){
+ const h=Math.round(size*1.4);
+ const stem='<path d="M20 56 L20 30" stroke="#6f8a5a" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M20 44 q-7 -3 -11 -9" stroke="#6f8a5a" stroke-width="1.8" fill="none" stroke-linecap="round"/>';
+ let bloom="";
+ if(type==="plum"){ bloom=petals5(20,18,11,"#f6a8c6")+`<circle cx="20" cy="18" r="2.4" fill="#f6dca0"/>`; }
+ else if(type==="azalea"){ bloom=petals5(20,18,11,"#ff9fb2")+`<circle cx="18" cy="15" r="0.9" fill="#b23b57"/><circle cx="22" cy="16" r="0.9" fill="#b23b57"/><circle cx="20" cy="19" r="0.9" fill="#b23b57"/>`; }
+ else if(type==="lily"){ let s=""; for(let i=0;i<6;i++){ s+=`<path transform="rotate(${i*60} 20 18)" d="M20 18 C 23 12, 23 2, 20 0 C 17 2, 17 12, 20 18 Z" fill="#ffd6e6"/>`; } bloom=s+`<circle cx="20" cy="18" r="2" fill="#e0a84a"/>`; }
+ else if(type==="iris"){ bloom=`<path d="M20 20 C14 14,14 4,20 2 C26 4,26 14,20 20Z" fill="#b48cff"/><path transform="rotate(120 20 18)" d="M20 20 C15 15,13 7,18 6 C22 8,23 15,20 20Z" fill="#9166e0"/><path transform="rotate(240 20 18)" d="M20 20 C15 15,13 7,18 6 C22 8,23 15,20 20Z" fill="#9166e0"/>`; }
+ else if(type==="hyacinth"){ let s=""; for(let i=0;i<7;i++){ const yy=5+i*4, xx=20+(i%2?3:-3); s+=`<circle cx="${xx}" cy="${yy}" r="3.3" fill="#9fb0ff"/>`; } bloom=s; }
+ else { let s=`<circle cx="20" cy="16" r="2" fill="#d8cfe8"/>`; for(let i=0;i<14;i++){ const a=i/14*6.28, lx=(20+Math.cos(a)*10).toFixed(1), ly=(16+Math.sin(a)*10).toFixed(1); s+=`<line x1="20" y1="16" x2="${lx}" y2="${ly}" stroke="#e9e2f2" stroke-width="0.8"/><circle cx="${lx}" cy="${ly}" r="1.3" fill="#e9e2f2"/>`; } bloom=s; }
+ return `<svg width="${size}" height="${h}" viewBox="0 0 40 56" style="opacity:.55;overflow:visible">${stem}${bloom}</svg>`;
+}
+function renderGarden(){
+ const g=$("#garden"); if(!g) return;
+ gardenEnsure();
+ g.innerHTML="";
+ S.garden.flowers.forEach(f=>{
+   const w=el("div","gf");
+   w.style.left=f.x+"%"; w.style[f.side]="0px"; w.style.animationDelay=f.delay+"s";
+   const size=Math.round(46*f.scale);
+   w.innerHTML=`<div style="transform:rotate(${f.rot}deg)${f.side==="top"?" scaleY(-1)":""}">${flowerSVG(f.type,size)}</div>`;
+   g.appendChild(w);
+ });
+}
+function recordDone(nd,projName,undo){
+ gardenEnsure();
+ const d=todayStr(); const log=S.logs[d]=S.logs[d]||{}; log.completed=log.completed||[];
+ if(undo){ if(log.completed.length) log.completed.pop(); if(S.garden.flowers.length) S.garden.flowers.pop(); }
+ else { log.completed.push({text:(nd.text||"(untitled)").slice(0,120),proj:projName||""}); S.garden.flowers.push(makeFlowerSpec()); }
+}
+function startRename(p){ if(!p) return; renamingId=p.id; renderNav(); }
+function fmtTs(ts){ const d=new Date(ts), now=new Date(); const sameDay=d.toDateString()===now.toDateString(); const tm=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}); return sameDay?tm:(d.toLocaleDateString([],{month:"short",day:"numeric"})+" "+tm); }
+function nudgesOff(){ return meetingPaused || S.silencedDate===todayStr(); }
 
 /* ---------------- cherry-blossom animation ---------------- */
 let gatePetals=null, closePetals=null;
@@ -183,12 +233,16 @@ function greetBack(){
  const t=now.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
  const d=now.toLocaleDateString([], {weekday:"long",month:"long",day:"numeric"});
  const carry=collectCarry();
+ let startHtml = S.nextStart
+   ? `<div class="carry" style="border-color:var(--accent-soft)"><div class="carry-h" style="color:var(--accent)">you planned to start with</div><div class="carry-row"><span>${esc(S.nextStart)}</span></div></div>`
+   : "";
  let carryHtml = carry.length
    ? `<div class="carry"><div class="carry-h">still open from before</div>`+carry.map(c=>`<div class="carry-row"><span class="carry-proj">${esc(c.proj)}</span><span>${c.flag==="blocked"?"⛔":"◌"} ${esc(c.text)}</span></div>`).join("")+`</div>`
    : `<div class="carry"><div class="carry-h">still open from before</div><div class="carry-none">nothing carried over. clean slate.</div></div>`;
  $("#gateInner").innerHTML=`
      <div class="gate-time">${d} · ${t}</div>
      <div class="gate-line">${esc(S.dailyLine)}</div>
+     ${startHtml}
      ${carryHtml}
      <button class="btn btn-solid" id="intoDay">into the day</button>`;
  $("#intoDay").addEventListener("click",enterApp);
@@ -210,7 +264,9 @@ function newNode(){ return {id:uid(),text:"",done:false,flag:"none",reason:"",co
 function renderNav(){
  $("#pinMisc").classList.toggle("sel",S.selected==="misc");
  $("#pinJournal").classList.toggle("sel",S.selected==="journal");
+ $("#pinBrain").classList.toggle("sel",S.selected==="brain");
  $("#miscCount").textContent=S.misc.length?S.misc.length:"";
+ $("#brainCount").textContent=S.brainDump.length?S.brainDump.length:"";
  const tested=(S.logs[todayStr()]&&S.logs[todayStr()].drill&&S.logs[todayStr()].drill.length)?true:false;
  $("#jrnlDot").style.background=tested?"var(--ok)":"var(--branch-dim)";
 
@@ -232,11 +288,23 @@ function renderNav(){
  list.style.height=h+"px"; list.innerHTML="";
  S.projects.forEach((p,i)=>{
    const y=top+i*slot+20;
+   if(p.id===renamingId){
+     const rn=el("div","proj-rename"); rn.style.top=(y-15)+"px";
+     const inp=el("input"); inp.value=p.name;
+     const commit=()=>{ const v=inp.value.trim(); if(v) p.name=v; renamingId=null; save(); renderAll(); };
+     inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); commit(); } else if(e.key==="Escape"){ renamingId=null; renderNav(); } });
+     inp.addEventListener("blur",commit);
+     rn.appendChild(inp); list.appendChild(rn); setTimeout(()=>{ inp.focus(); inp.select(); },0);
+     return;
+   }
    const d=el("div","proj"+(p.id===S.selected?" sel":"")); d.style.top=(y-14)+"px";
    const open=countOpen(p.nodes);
    const nm=el("span","proj-name"); nm.textContent=p.name;
    d.appendChild(nm);
    if(open){ const c=el("span","proj-count"); c.textContent=open; d.appendChild(c); }
+   const edit=el("button","proj-del"); edit.textContent="✎"; edit.title="rename project";
+   edit.addEventListener("click",ev=>{ ev.stopPropagation(); startRename(p); });
+   d.appendChild(edit);
    const del=el("button","proj-del"); del.textContent="✕"; del.title="delete project";
    del.addEventListener("click",ev=>{ ev.stopPropagation(); confirmDeleteProj(p,d,y); });
    d.appendChild(del);
@@ -262,6 +330,7 @@ function confirmDeleteProj(p,row,y){
 function renderMain(){
  if(S.selected==="misc"){ renderMisc(); return; }
  if(S.selected==="journal"){ renderJournal(); return; }
+ if(S.selected==="brain"){ renderBrain(); return; }
  renderProject();
 }
 function headerBits(show){ $("#backBtn").classList.toggle("show",navStack.length>0); $("#leftOffWrap").style.display=show?"flex":"none"; }
@@ -288,7 +357,7 @@ function renderNode(nd,siblings){
  caret.addEventListener("click",()=>{ nd.collapsed=!nd.collapsed; save(); renderProject(); });
  row.appendChild(caret);
  const cb=el("div","cbox"+(nd.done?" on":"")+(nd.flag==="blocked"?" blocked":""));
- cb.addEventListener("click",()=>{ nd.done=!nd.done; save(); renderProject(); renderNav(); });
+ cb.addEventListener("click",()=>{ nd.done=!nd.done; const proj=curProj(); recordDone(nd,proj?proj.name:"",!nd.done); save(); renderProject(); renderNav(); renderGarden(); });
  row.appendChild(cb);
  const tx=el("div","ntext"); tx.contentEditable="true"; tx.textContent=nd.text;
  tx.addEventListener("blur",()=>{ nd.text=tx.textContent.trim(); save(); });
@@ -332,10 +401,36 @@ function renderMisc(){
    const it=el("div","misc-item");
    const cb=el("div","cbox");
    const tx=el("span"); tx.style.flex="1"; tx.textContent=m.text;
-   cb.addEventListener("click",()=>{ it.classList.add("gone"); setTimeout(()=>{ S.misc=S.misc.filter(x=>x.id!==m.id); save(); renderMisc(); renderNav(); },250); });
+   cb.addEventListener("click",()=>{ recordDone({text:m.text},"misc",false); it.classList.add("gone"); setTimeout(()=>{ S.misc=S.misc.filter(x=>x.id!==m.id); save(); renderMisc(); renderNav(); renderGarden(); },250); });
    it.appendChild(cb); it.appendChild(tx); wrap.appendChild(it);
  });
  inp.focus();
+}
+
+/* ---------------- brain dump ---------------- */
+function renderBrain(){
+ headerBits(false);
+ $("#mhTitle").textContent="brain dump";
+ $("#mhMeta").textContent=`${S.brainDump.length} thought${S.brainDump.length===1?"":"s"}`;
+ const wrap=$("#treeWrap"); wrap.innerHTML="";
+ const note=el("div","bd-note"); note.textContent="empty your head mid-work. each thought is timestamped and saved. not tasks, just thinking.";
+ wrap.appendChild(note);
+ const add=el("div","bd-add");
+ const ta=el("textarea"); ta.placeholder="what's on your mind? (Ctrl+Enter to drop it)";
+ const btn=el("button","btn bd-addbtn"); btn.textContent="drop it";
+ const commit=()=>{ const v=ta.value.trim(); if(!v) return; S.brainDump.unshift({id:uid(),ts:Date.now(),text:v}); ta.value=""; save(); renderBrain(); renderNav(); };
+ btn.addEventListener("click",commit);
+ ta.addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); commit(); } });
+ add.appendChild(ta); add.appendChild(btn); wrap.appendChild(add);
+ S.brainDump.forEach(b=>{
+   const it=el("div","bd-item");
+   const tm=el("div","bd-time"); tm.textContent=fmtTs(b.ts);
+   const tx=el("div","bd-text"); tx.textContent=b.text;
+   const del=el("button","bd-del"); del.textContent="✕"; del.title="delete";
+   del.addEventListener("click",()=>{ S.brainDump=S.brainDump.filter(x=>x.id!==b.id); save(); renderBrain(); renderNav(); });
+   it.appendChild(tm); it.appendChild(tx); it.appendChild(del); wrap.appendChild(it);
+ });
+ setTimeout(()=>{ const t=$("#treeWrap").querySelector(".bd-add textarea"); if(t) t.focus(); },0);
 }
 
 /* ---------------- journal ---------------- */
@@ -344,7 +439,9 @@ function renderJournal(){
  $("#mhTitle").textContent="journal"; $("#mhMeta").textContent="everything you've saved";
  const wrap=$("#treeWrap"); wrap.innerHTML="";
  const note=el("div","save-note");
- note.innerHTML="Your days are saved in this browser only. Clearing browser data, or opening Hanami on another device, starts empty, that's a limit of running in the browser. Use <b>copy backup</b> to keep a copy you control. The Windows build saves to a real file on your disk instead.";
+ note.innerHTML = window.hanamiAPI
+   ? "Your days are saved to a file on your computer at <b>%APPDATA%\\Hanami\\hanami-data.json</b>. Back it up by copying that file, or use <b>copy backup</b> below for a clipboard copy."
+   : "Your days are saved in this browser only. Clearing browser data, or opening Hanami on another device, starts empty. Use <b>copy backup</b> to keep a copy you control. The installed Windows app saves to a real file on your disk instead.";
  wrap.appendChild(note);
  const tools=el("div","jrnl-tools");
  const bk=el("button","mini"); bk.textContent="copy backup (all data)";
@@ -395,7 +492,7 @@ function renderTestStatus(){
  s.innerHTML=`<span class="pdot" style="background:${tested?"var(--ok)":"var(--branch-dim)"}"></span><span style="color:${tested?"var(--ok)":"var(--ink-faint)"}">${tested?"today's testing: done":"today's testing: not yet"}</span>`;
  const btn=$("#drillBtn"); btn.classList.toggle("done",tested); btn.textContent=tested?"testing logged ✓ (edit)":"log today's testing";
 }
-function renderAll(){ renderNav(); renderMain(); renderTestStatus(); updatePomoUI(); }
+function renderAll(){ renderNav(); renderMain(); renderTestStatus(); updatePomoUI(); renderGarden(); }
 
 /* ---------------- timers ---------------- */
 let pomo={phase:"idle",left:0,running:false};
@@ -414,18 +511,24 @@ function probeNotif(){
  Notification.requestPermission().then(p=>{ stat.textContent=p==="granted"?"desktop notifications on":"running in-app only here. the Windows build reaches you when hidden."; }).catch(()=>{ stat.textContent="in-app nudges only in this browser."; });
 }
 function tick(){
- if(meetingPaused) return;
+ const off=nudgesOff();
  if(pomo.running){ pomo.left--; if(pomo.left<=0) pomoPhaseEnd(); updatePomoUI(); }
- hyd.left--; if(hyd.left<=0){ nudge("💧 hydrate","a sip of water. 30 minutes passed.",false); hyd.left=S.settings.hyd*60; }
- eye.left--; if(eye.left<=0){ nudge("👁 rest your eyes","look 20 feet away for 20 seconds.",false); eye.left=S.settings.eye*60; }
+ if(!off){
+   hyd.left--; if(hyd.left<=0){ nudge("💧 hydrate","a sip of water. 30 minutes passed.",false); hyd.left=S.settings.hyd*60; }
+   eye.left--; if(eye.left<=0){ nudge("👁 rest your eyes","look 20 feet away for 20 seconds.",false); eye.left=S.settings.eye*60; }
+ }
  updateNudgeUI();
 }
 function pomoPhaseEnd(){
  if(pomo.phase==="work"){
-   pomo.phase="break"; pomo.left=S.settings.brk*60;
-   nudge("🌸 break time",`${S.settings.brk} minutes. step away from the screen.`,true);
-   breakCheckTimer=setTimeout(()=>{ nudge("still there?","are you sure you actually stopped?",true); },60000);
- } else { pomo.phase="work"; pomo.left=S.settings.work*60; nudge("back to it",`${S.settings.work}-minute focus block started.`,false); }
+   if(S.settings.autoBreak){
+     pomo.phase="break"; pomo.left=S.settings.brk*60;
+     if(!nudgesOff()){ nudge("🌸 break time",`${S.settings.brk} minutes. step away from the screen.`,true); breakCheckTimer=setTimeout(()=>{ if(!nudgesOff()) nudge("still there?","are you sure you actually stopped?",true); },60000); }
+   } else {
+     pomo={phase:"idle",left:S.settings.work*60,running:false};
+     if(!nudgesOff()) nudge("focus done",`nice. ${S.settings.work} minutes in the bag.`,false);
+   }
+ } else { pomo.phase="work"; pomo.left=S.settings.work*60; if(!nudgesOff()) nudge("back to it",`${S.settings.work}-minute focus block started.`,false); }
 }
 function updatePomoUI(){
  const m=Math.floor(Math.max(pomo.left,0)/60), s=Math.max(pomo.left,0)%60;
@@ -442,10 +545,12 @@ function updatePomoUI(){
 }
 function miniBtn(txt,cls,fn){ const x=el("button","mini"+(cls?" "+cls:"")); x.textContent=txt; x.addEventListener("click",fn); return x; }
 function updateNudgeUI(){
+ const off=nudgesOff();
  const f=x=>`in ${Math.floor(x/60)}:${String(x%60).padStart(2,"0")}`;
- $("#hydNx").textContent=meetingPaused?"paused":f(Math.max(hyd.left,0));
- $("#eyeNx").textContent=meetingPaused?"paused":f(Math.max(eye.left,0));
- $("#hydDot").className="dot"+(meetingPaused?" off":""); $("#eyeDot").className="dot"+(meetingPaused?" off":"");
+ const lab = meetingPaused ? "paused" : (S.silencedDate===todayStr() ? "off till tomorrow" : null);
+ $("#hydNx").textContent=lab||f(Math.max(hyd.left,0));
+ $("#eyeNx").textContent=lab||f(Math.max(eye.left,0));
+ $("#hydDot").className="dot"+(off?" off":""); $("#eyeDot").className="dot"+(off?" off":"");
 }
 function nudge(title,body,amber){
  const wrap=$("#toasts"); const t=el("div","toast"+(amber?" amber":""));
@@ -463,16 +568,29 @@ $("#modal").addEventListener("click",e=>{ if(e.target.id==="modal") closeModal()
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeModal(); closeZen(); } });
 
 $("#shutdownBtn").addEventListener("click",()=>{
- const log=S.logs[todayStr()]||{};
+ const d=todayStr(); const log=S.logs[d]||{}; const completed=log.completed||[];
+ const doneHtml = completed.length
+   ? `<div class="sd-done"><div class="sd-done-h">completed today (${completed.length})</div>`+completed.map(c=>`<div class="sd-done-row">${c.proj?`<span class="pj">${esc(c.proj)}</span>`:""}<span>✓ ${esc(c.text)}</span></div>`).join("")+`</div>`
+   : `<div class="sd-done"><div class="sd-none">no tasks ticked today. that's alright, some days are like that.</div></div>`;
  openModal(`
    <div class="modal-top"><button class="modal-back" id="mBack">←</button><div class="modal-h">closing the day</div></div>
-   <div class="modal-sub">what did you actually do today? write it freely. it's saved to your journal, and open threads carry into tomorrow.</div>
-   <textarea class="ta" id="sdText" placeholder="today I...">${esc(log.shutdown||"")}</textarea>
+   ${doneHtml}
+   <div class="sd-label">anything to note about today?</div>
+   <textarea class="ta" id="sdText" style="min-height:88px" placeholder="today I...">${esc(log.shutdown||"")}</textarea>
+   <div class="sd-label">tomorrow, start with</div>
+   <textarea class="ta" id="sdTom" style="min-height:66px" placeholder="the first thing to pick up tomorrow...">${esc(log.tomorrow||"")}</textarea>
+   <div class="modal-sub" style="margin:12px 0 0;font-size:12px">nudges go quiet until your next workday. the garden resets.</div>
    <div class="modal-foot"><button class="btn" id="sdCancel">not yet</button><button class="btn btn-solid" id="sdSave">done for today</button></div>`);
  $("#mBack").addEventListener("click",closeModal);
  $("#sdCancel").addEventListener("click",closeModal);
  $("#sdSave").addEventListener("click",()=>{
-   const d=todayStr(); S.logs[d]=S.logs[d]||{}; S.logs[d].shutdown=$("#sdText").value.trim(); save();
+   S.logs[d]=S.logs[d]||{};
+   S.logs[d].shutdown=$("#sdText").value.trim();
+   S.logs[d].tomorrow=$("#sdTom").value.trim();
+   S.nextStart=S.logs[d].tomorrow||null;
+   S.silencedDate=todayStr();
+   S.garden={date:todayStr(),flowers:[]};
+   save(); renderGarden(); updateNudgeUI();
    showCloser();
  });
 });
@@ -533,12 +651,14 @@ $("#openSettings").addEventListener("click",()=>{
    <div class="set-row"><span>break (minutes)</span><input id="sBrk" type="number" value="${S.settings.brk}"></div>
    <div class="set-row"><span>hydrate every (minutes)</span><input id="sHyd" type="number" value="${S.settings.hyd}"></div>
    <div class="set-row"><span>rest eyes every (minutes)</span><input id="sEye" type="number" value="${S.settings.eye}"></div>
+   <label class="set-check"><input type="checkbox" id="sAuto" ${S.settings.autoBreak?"checked":""} style="width:auto"> take a short break after each focus session</label>
    <div class="modal-foot"><button class="btn" id="setCancel">cancel</button><button class="btn btn-solid" id="setSave">save</button></div>`);
  $("#mBack").addEventListener("click",closeModal);
  $("#setCancel").addEventListener("click",closeModal);
  $("#setSave").addEventListener("click",()=>{
    S.settings.work=Math.max(1,+$("#sWork").value||40); S.settings.brk=Math.max(1,+$("#sBrk").value||10);
    S.settings.hyd=Math.max(1,+$("#sHyd").value||30); S.settings.eye=Math.max(1,+$("#sEye").value||20);
+   S.settings.autoBreak=$("#sAuto").checked;
    save(); hyd.left=S.settings.hyd*60; eye.left=S.settings.eye*60; if(pomo.phase==="idle") pomo.left=S.settings.work*60;
    closeModal(); updatePomoUI(); updateNudgeUI();
  });
@@ -548,13 +668,14 @@ $("#meetingTog").addEventListener("click",()=>{
  meetingPaused=!meetingPaused; $("#meetingTog").classList.toggle("on",meetingPaused);
  $("#meetingTog").textContent=meetingPaused?"nudges paused — resume":"pause all nudges (meeting)"; updateNudgeUI();
 });
-$("#addProj").addEventListener("click",()=>{ const p={id:uid(),name:"new project",leftOff:"",nodes:[]}; S.projects.push(p); go(p.id); });
+$("#addProj").addEventListener("click",()=>{ const p={id:uid(),name:"new project",leftOff:"",nodes:[]}; S.projects.push(p); S.selected=p.id; save(); renderAll(); startRename(p); });
 $("#pinMisc").addEventListener("click",()=>go("misc"));
 $("#pinJournal").addEventListener("click",()=>go("journal"));
+$("#pinBrain").addEventListener("click",()=>go("brain"));
 $("#backBtn").addEventListener("click",back);
 $("#zenOpen").addEventListener("click",openZen);
 $("#zenBack").addEventListener("click",closeZen);
-$("#mhTitle").addEventListener("dblclick",()=>{ const p=curProj(); if(!p) return; const nv=prompt("rename project",p.name); if(nv&&nv.trim()){ p.name=nv.trim(); save(); renderAll(); } });
+$("#mhTitle").addEventListener("dblclick",()=>{ startRename(curProj()); });
 
 /* ---------------- boot ---------------- */
 openGate();
