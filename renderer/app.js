@@ -1,0 +1,560 @@
+const LINES=[
+ "It's a beautiful day to break something unbreakable.",
+ "It's a beautiful day to make the maths hold.",
+ "It's a beautiful day to out-think a quantum computer.",
+ "It's a beautiful day to prove it works.",
+ "It's a beautiful day to find the flaw first.",
+ "It's a beautiful day to build what outlives the attack.",
+ "It's a beautiful day to ship something you can defend.",
+ "It's a beautiful day to keep a secret properly.",
+ "It's a beautiful day to turn noise into signal.",
+ "It's a beautiful day to close the gap between the proof and the product."
+];
+const CLOSERS=[
+ "Good work today, Tulsi.",
+ "Well done. That's a day.",
+ "Solid day. Rest now.",
+ "You showed up. That's the whole thing.",
+ "Nice work. The threads will keep till morning.",
+ "Done and dusted. Proud of the effort.",
+ "That's a wrap. Go rest your eyes for real.",
+ "Good job. The maths will still be there tomorrow."
+];
+const KEY="hanami.v1";
+const uid=()=>Math.random().toString(36).slice(2,9);
+const todayStr=()=>new Date().toISOString().slice(0,10);
+
+function seed(){
+ return {
+  greetedDate:null, dailyLine:null,
+  projects:[
+   {id:uid(),name:"PQC radio mesh",leftOff:"drafting the handshake fragmentation budget",nodes:[
+     {id:uid(),text:"Spec the fragmentation header",done:false,flag:"progress",reason:"",collapsed:false,children:[
+       {id:uid(),text:"Fixed-size piece count",done:false,flag:"none",reason:"",collapsed:true,children:[]},
+       {id:uid(),text:"Reed-Solomon parity pieces (k of n)",done:true,flag:"none",reason:"",collapsed:true,children:[]},
+     ]},
+     {id:uid(),text:"ML-KEM ciphertext size vs 230-byte frame",done:false,flag:"none",reason:"",collapsed:true,children:[]},
+     {id:uid(),text:"Confirm frame budget with Sattvik",done:false,flag:"blocked",reason:"waiting on his radio bench numbers",collapsed:true,children:[]},
+   ]},
+   {id:uid(),name:"PQC in 5G",leftOff:"",nodes:[
+     {id:uid(),text:"Outline PQ-SUCI threat model",done:false,flag:"none",reason:"",collapsed:true,children:[]},
+   ]},
+   {id:uid(),name:"Secure ISAC",leftOff:"",nodes:[]},
+   {id:uid(),name:"5G field guide",leftOff:"",nodes:[]},
+  ],
+  misc:[],
+  selected:null,
+  settings:{work:40,brk:10,hyd:30,eye:20},
+  logs:{}
+ };
+}
+let S;
+try{ if(window.HANAMI_INIT){ S=window.HANAMI_INIT; } else { const raw=localStorage.getItem(KEY); S=raw?JSON.parse(raw):seed(); } }catch(e){ S=seed(); }
+// migrate older saves
+if(!Array.isArray(S.misc)) S.misc=[];
+if(!S.logs) S.logs={};
+if(!S.settings) S.settings={work:40,brk:10,hyd:30,eye:20};
+if(!Array.isArray(S.projects)) S.projects=[];
+if(!S.selected && S.projects[0]) S.selected=S.projects[0].id;
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} try{ if(window.hanamiAPI) window.hanamiAPI.save(S); }catch(e){} }
+
+const $=s=>document.querySelector(s);
+const el=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e;};
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+let navStack=[];
+function go(sel){ if(S.selected!==sel){ navStack.push(S.selected); } S.selected=sel; save(); renderAll(); }
+function back(){ if(navStack.length){ S.selected=navStack.pop(); save(); renderAll(); } }
+
+/* ---------------- cherry-blossom animation ---------------- */
+let gatePetals=null, closePetals=null;
+function buildTree(w,h,depth){
+ const branches=[], blooms=[];
+ const bark="#5a434a";
+ const pale=["#fbe4ec","#f7d3e0","#fcdbe8","#f2c2d5","#ffffff"];
+ const P=n=>n.toFixed(1);
+ function taper(x,y,ang,len,w0,w1){
+   const nx=Math.cos(ang+Math.PI/2), ny=Math.sin(ang+Math.PI/2);
+   const x2=x+Math.cos(ang)*len, y2=y+Math.sin(ang)*len;
+   const cang=ang-0.05, cl=len*0.5, cx=x+Math.cos(cang)*cl, cy=y+Math.sin(cang)*cl, cw=(w0+w1)/4;
+   const d=`M${P(x+nx*w0/2)} ${P(y+ny*w0/2)} Q${P(cx+nx*cw)} ${P(cy+ny*cw)} ${P(x2+nx*w1/2)} ${P(y2+ny*w1/2)} L${P(x2-nx*w1/2)} ${P(y2-ny*w1/2)} Q${P(cx-nx*cw)} ${P(cy-ny*cw)} ${P(x-nx*w0/2)} ${P(y-ny*w0/2)} Z`;
+   branches.push(`<path d="${d}" fill="${bark}"/>`);
+   return [x2,y2];
+ }
+ function flower(x,y,r){
+   const col=pale[Math.floor(Math.random()*pale.length)];
+   let s=`<g transform="translate(${P(x)} ${P(y)}) rotate(${(Math.random()*72)|0})">`;
+   for(let i=0;i<5;i++) s+=`<path transform="rotate(${i*72})" d="M0 0 C ${P(0.55*r)} ${P(-0.2*r)}, ${P(0.62*r)} ${P(-0.78*r)}, ${P(0.16*r)} ${P(-0.98*r)} L0 ${P(-0.82*r)} L${P(-0.16*r)} ${P(-0.98*r)} C ${P(-0.62*r)} ${P(-0.78*r)}, ${P(-0.55*r)} ${P(-0.2*r)}, 0 0 Z" fill="${col}"/>`;
+   s+=`<circle r="${P(r*0.17)}" fill="#f6dca0"/></g>`;
+   return s;
+ }
+ function bud(x,y,r){ return `<circle cx="${P(x)}" cy="${P(y)}" r="${P(r)}" fill="#e38aad"/>`; }
+ function cluster(x,y,sc){
+   let s=`<g class="blossom-sway" style="animation-delay:${(Math.random()*6).toFixed(1)}s">`;
+   const nf=2+Math.floor(Math.random()*3);
+   for(let i=0;i<nf;i++){ const a=Math.random()*6.28,d=Math.random()*9*sc; s+=flower(x+Math.cos(a)*d,y+Math.sin(a)*d,(5+Math.random()*3.5)*sc); }
+   const nb=1+Math.floor(Math.random()*3);
+   for(let i=0;i<nb;i++){ const a=Math.random()*6.28,d=5+Math.random()*9*sc; s+=bud(x+Math.cos(a)*d,y+Math.sin(a)*d,(1.6+Math.random()*1.3)*sc); }
+   blooms.push(s+"</g>");
+ }
+ function grow(x,y,ang,len,w0,dep){
+   const w1=Math.max(1.3,w0*0.62);
+   const [x2,y2]=taper(x,y,ang,len,w0,w1);
+   if(dep<=0){ cluster(x2,y2,1); return; }
+   if(dep<=2&&Math.random()<0.55) cluster((x+x2)/2,(y+y2)/2,0.8);
+   const n=2+(Math.random()<0.4?1:0);
+   for(let b=0;b<n;b++){
+     const spread=0.32+Math.random()*0.3;
+     const na=ang+(b===0?-spread:b===1?spread:(Math.random()-0.5)*0.55)-0.03+Math.random()*0.06;
+     grow(x2,y2,na,len*(0.72+Math.random()*0.06),w1,dep-1);
+   }
+ }
+ grow(w/2,h,-Math.PI/2+(Math.random()-0.5)*0.08,h*0.2,Math.max(10,w*0.02),depth);
+ return {inner:branches.join("")+blooms.join("")};
+}
+function makePetals(canvas,mult){
+ const ctx=canvas.getContext("2d"); let raf=null,running=true;
+ const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+ const dpr=Math.min(window.devicePixelRatio||1,2);
+ const cols=["#fbe4ec","#f7d3e0","#f9dbe6","#f2c2d5","#ffffff"];
+ let W=0,H=0,petals=[];
+ const mk=y=>({x:Math.random()*W,y,s:5+Math.random()*7,rot:Math.random()*6.28,rs:(Math.random()-0.5)*0.045,vy:0.3+Math.random()*0.85,ph:Math.random()*6.28,amp:0.4+Math.random()*0.9,flip:Math.random()*6.28,fs:0.02+Math.random()*0.05,col:cols[Math.floor(Math.random()*cols.length)],a:0.55+Math.random()*0.4});
+ function resize(){ const r=canvas.getBoundingClientRect(); W=r.width||window.innerWidth; H=r.height||window.innerHeight; canvas.width=W*dpr; canvas.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); const n=Math.min(100,Math.round(Math.min(58,Math.max(16,Math.floor(W/20)))*(mult||1))); petals=[]; for(let i=0;i<n;i++) petals.push(mk(Math.random()*H)); }
+ function shape(s){ ctx.beginPath(); ctx.moveTo(0,0); ctx.bezierCurveTo(s*0.55,-s*0.2,s*0.62,-s*0.8,s*0.17,-s*1.0); ctx.lineTo(0,-s*0.8); ctx.lineTo(-s*0.17,-s*1.0); ctx.bezierCurveTo(-s*0.62,-s*0.8,-s*0.55,-s*0.2,0,0); ctx.closePath(); }
+ function draw(p){ ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.scale(Math.cos(p.flip)*0.7+0.25,1); ctx.globalAlpha=p.a; ctx.fillStyle=p.col; shape(p.s); ctx.fill(); ctx.restore(); }
+ const t0=performance.now();
+ function frame(now){ if(!running) return; const t=now-t0; ctx.clearRect(0,0,W,H); const wind=Math.sin(t*0.0004)*0.75+0.45; petals.forEach(p=>{ p.y+=p.vy; p.ph+=0.02; p.flip+=p.fs; p.x+=wind+Math.sin(p.ph)*p.amp; p.rot+=p.rs; if(p.y>H+24){ p.y=-24; p.x=Math.random()*W; } if(p.x>W+24) p.x=-24; else if(p.x<-24) p.x=W+24; draw(p); }); raf=requestAnimationFrame(frame); }
+ resize();
+ if(reduce){ ctx.clearRect(0,0,W,H); petals.forEach(draw); }
+ else raf=requestAnimationFrame(frame);
+ const onR=()=>resize(); window.addEventListener("resize",onR);
+ return { stop(){ running=false; if(raf) cancelAnimationFrame(raf); window.removeEventListener("resize",onR); } };
+}
+function startGateBg(){ const tree=$("#gateTree"); tree.setAttribute("viewBox","0 0 900 520"); tree.innerHTML=buildTree(900,520,4).inner; if(gatePetals) gatePetals.stop(); gatePetals=makePetals($("#gatePetals"),1.6); }
+function stopGateBg(){ if(gatePetals){ gatePetals.stop(); gatePetals=null; } }
+let zenPetals=null;
+function openZen(){ const z=$("#zen"); z.classList.add("on"); const tree=$("#zenTree"); tree.setAttribute("viewBox","0 0 900 560"); tree.innerHTML=buildTree(900,560,4).inner; if(zenPetals) zenPetals.stop(); zenPetals=makePetals($("#zenPetals"),1.7); }
+function closeZen(){ $("#zen").classList.remove("on"); if(zenPetals){ zenPetals.stop(); zenPetals=null; } }
+
+/* ---------------- gate / morning ---------------- */
+function openGate(){
+ $("#gate").style.display="flex";
+ startGateBg();
+ gateLanding();
+}
+function gateLanding(){
+ const newDay=S.greetedDate!==todayStr();
+ if(newDay){
+   $("#gateInner").innerHTML=`
+     <div class="gate-land">
+       <div class="gate-kao">花見</div>
+       <button class="gate-enter" id="gateProceed">good morning →</button>
+       <div class="gate-hint">or just stay in the blossoms a while</div>
+     </div>`;
+   $("#gateProceed").addEventListener("click",greetInput);
+ } else {
+   $("#gateInner").innerHTML=`
+     <div class="gate-land">
+       <div class="gate-kao">花見</div>
+       <div class="gate-h" style="font-size:22px">Hello again, Tulsi</div>
+       <div class="gate-sub" style="margin-bottom:2px">want to do some more work today?</div>
+       <button class="gate-enter" id="gateProceed">yes, back to it →</button>
+       <div class="gate-hint">or just stay in the blossoms a while</div>
+       <button class="gate-nextday" id="startNext">start next day (good morning) →</button>
+     </div>`;
+   $("#gateProceed").addEventListener("click",enterApp);
+   $("#startNext").addEventListener("click",()=>{ S.greetedDate=null; save(); greetInput(); });
+ }
+}
+function greetInput(){
+ $("#gateInner").innerHTML=`
+   <div class="gate-petal">🌸</div>
+   <div class="gate-h">good morning, Tulsi</div>
+   <div class="gate-sub">say good morning back, and the day opens.</div>
+   <input class="gate-input" id="greetIn" placeholder="type your good morning" autocomplete="off">
+   <div class="gate-hint">press enter</div>`;
+ const inp=$("#greetIn"); inp.focus();
+ inp.addEventListener("keydown",e=>{ if(e.key==="Enter"&&inp.value.trim()) greetBack(); });
+}
+function greetBack(){
+ S.dailyLine=LINES[Math.floor(Math.random()*LINES.length)];
+ S.greetedDate=todayStr(); save();
+ const now=new Date();
+ const t=now.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+ const d=now.toLocaleDateString([], {weekday:"long",month:"long",day:"numeric"});
+ const carry=collectCarry();
+ let carryHtml = carry.length
+   ? `<div class="carry"><div class="carry-h">still open from before</div>`+carry.map(c=>`<div class="carry-row"><span class="carry-proj">${esc(c.proj)}</span><span>${c.flag==="blocked"?"⛔":"◌"} ${esc(c.text)}</span></div>`).join("")+`</div>`
+   : `<div class="carry"><div class="carry-h">still open from before</div><div class="carry-none">nothing carried over. clean slate.</div></div>`;
+ $("#gateInner").innerHTML=`
+     <div class="gate-time">${d} · ${t}</div>
+     <div class="gate-line">${esc(S.dailyLine)}</div>
+     ${carryHtml}
+     <button class="btn btn-solid" id="intoDay">into the day</button>`;
+ $("#intoDay").addEventListener("click",enterApp);
+}
+function collectCarry(){
+ const out=[];
+ S.projects.forEach(p=>walk(p.nodes,n=>{ if(!n.done && (n.flag==="blocked"||n.flag==="progress")) out.push({proj:p.name,text:n.text,flag:n.flag}); }));
+ return out;
+}
+function enterApp(){ stopGateBg(); $("#gate").style.display="none"; $("#app").style.display="block"; renderAll(); startTimers(); }
+
+/* ---------------- tree helpers ---------------- */
+function walk(nodes,fn){ nodes.forEach(n=>{ fn(n); if(n.children) walk(n.children,fn); }); }
+function curProj(){ return S.projects.find(p=>p.id===S.selected); }
+function countOpen(nodes){ let c=0; walk(nodes,n=>{ if(!n.done) c++; }); return c; }
+function newNode(){ return {id:uid(),text:"",done:false,flag:"none",reason:"",collapsed:false,children:[]}; }
+
+/* ---------------- nav ---------------- */
+function renderNav(){
+ $("#pinMisc").classList.toggle("sel",S.selected==="misc");
+ $("#pinJournal").classList.toggle("sel",S.selected==="journal");
+ $("#miscCount").textContent=S.misc.length?S.misc.length:"";
+ const tested=(S.logs[todayStr()]&&S.logs[todayStr()].drill&&S.logs[todayStr()].drill.length)?true:false;
+ $("#jrnlDot").style.background=tested?"var(--ok)":"var(--branch-dim)";
+
+ const list=$("#projList"), svg=$("#navSvg");
+ const n=S.projects.length, slot=62, top=20;
+ const h=Math.max(top+n*slot+30,340);
+ svg.setAttribute("height",h); svg.setAttribute("viewBox",`0 0 256 ${h}`);
+ let paths=`<path d="M38 ${h-10} Q44 ${h/2} 42 44 Q41 28 46 16" fill="none" stroke="var(--branch)" stroke-width="5" stroke-linecap="round"/>`;
+ let blossoms="";
+ S.projects.forEach((p,i)=>{
+   const y=top+i*slot+20, sel=p.id===S.selected;
+   paths+=`<path d="M41 ${y} Q68 ${y-8} 86 ${y-3}" fill="none" stroke="var(--branch)" stroke-width="3" stroke-linecap="round"/>`;
+   const r=sel?8:6.5, c1=sel?"var(--blossom-3)":"var(--blossom-2)";
+   blossoms+=`<circle cx="86" cy="${y-3}" r="${r}" fill="${c1}"/><circle cx="${86+r+2}" cy="${y-9}" r="${r*0.55}" fill="var(--blossom-1)"/><circle cx="${86+r+1}" cy="${y+5}" r="${r*0.5}" fill="var(--blossom-2)"/>`;
+ });
+ blossoms+=`<circle cx="46" cy="14" r="6.5" fill="var(--blossom-3)"/><circle cx="56" cy="8" r="4" fill="var(--blossom-2)"/>`;
+ svg.innerHTML=paths+blossoms;
+
+ list.style.height=h+"px"; list.innerHTML="";
+ S.projects.forEach((p,i)=>{
+   const y=top+i*slot+20;
+   const d=el("div","proj"+(p.id===S.selected?" sel":"")); d.style.top=(y-14)+"px";
+   const open=countOpen(p.nodes);
+   const nm=el("span","proj-name"); nm.textContent=p.name;
+   d.appendChild(nm);
+   if(open){ const c=el("span","proj-count"); c.textContent=open; d.appendChild(c); }
+   const del=el("button","proj-del"); del.textContent="✕"; del.title="delete project";
+   del.addEventListener("click",ev=>{ ev.stopPropagation(); confirmDeleteProj(p,d,y); });
+   d.appendChild(del);
+   nm.addEventListener("click",()=>go(p.id));
+   d.addEventListener("click",ev=>{ if(ev.target===d) go(p.id); });
+   list.appendChild(d);
+ });
+}
+function confirmDeleteProj(p,row,y){
+ const c=el("div","proj-confirm"); c.style.top=(y-15)+"px";
+ c.innerHTML=`delete "${esc(p.name)}"? <button class="yes">delete</button><button class="no">keep</button>`;
+ row.style.visibility="hidden";
+ $("#projList").appendChild(c);
+ c.querySelector(".no").addEventListener("click",()=>{ c.remove(); renderNav(); });
+ c.querySelector(".yes").addEventListener("click",()=>{
+   S.projects=S.projects.filter(x=>x.id!==p.id);
+   if(S.selected===p.id) S.selected=S.projects[0]?S.projects[0].id:"misc";
+   save(); renderAll();
+ });
+}
+
+/* ---------------- main router ---------------- */
+function renderMain(){
+ if(S.selected==="misc"){ renderMisc(); return; }
+ if(S.selected==="journal"){ renderJournal(); return; }
+ renderProject();
+}
+function headerBits(show){ $("#backBtn").classList.toggle("show",navStack.length>0); $("#leftOffWrap").style.display=show?"flex":"none"; }
+
+function renderProject(){
+ headerBits(true);
+ const p=curProj();
+ if(!p){ $("#mhTitle").textContent="no projects"; $("#mhMeta").textContent=""; $("#treeWrap").innerHTML=""; $("#leftOffWrap").style.display="none"; return; }
+ $("#mhTitle").textContent=p.name;
+ $("#mhMeta").textContent=`${countOpen(p.nodes)} open`;
+ const lo=$("#leftOff"); lo.value=p.leftOff||""; lo.oninput=()=>{ p.leftOff=lo.value; save(); };
+ const wrap=$("#treeWrap"); wrap.innerHTML="";
+ if(!p.nodes.length){ const e=el("div","empty-proj"); e.textContent="no tasks yet. add the first one."; wrap.appendChild(e); }
+ else p.nodes.forEach(nd=>wrap.appendChild(renderNode(nd,p.nodes)));
+ const add=el("button","add-child"); add.style.marginLeft="0"; add.textContent="+ add task";
+ add.addEventListener("click",()=>{ p.nodes.push(newNode()); save(); renderProject(); renderNav(); focusLast(wrap); });
+ wrap.appendChild(add);
+}
+function renderNode(nd,siblings){
+ const node=el("div","node"+(nd.done?" done":""));
+ const row=el("div","node-row");
+ const hasKids=nd.children&&nd.children.length;
+ const caret=el("div","caret"+(hasKids?"":" empty")); caret.textContent=nd.collapsed?"▶":"▼";
+ caret.addEventListener("click",()=>{ nd.collapsed=!nd.collapsed; save(); renderProject(); });
+ row.appendChild(caret);
+ const cb=el("div","cbox"+(nd.done?" on":"")+(nd.flag==="blocked"?" blocked":""));
+ cb.addEventListener("click",()=>{ nd.done=!nd.done; save(); renderProject(); renderNav(); });
+ row.appendChild(cb);
+ const tx=el("div","ntext"); tx.contentEditable="true"; tx.textContent=nd.text;
+ tx.addEventListener("blur",()=>{ nd.text=tx.textContent.trim(); save(); });
+ tx.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); tx.blur(); const nn=newNode(); siblings.splice(siblings.indexOf(nd)+1,0,nn); save(); renderProject(); focusLast($("#treeWrap")); } });
+ row.appendChild(tx);
+ if(nd.flag==="blocked"){ const t=el("span","tag blocked"); t.textContent="blocked"; row.appendChild(t); }
+ else if(nd.flag==="progress"){ const t=el("span","tag progress"); t.textContent="in progress"; row.appendChild(t); }
+ const tools=el("div","node-tools");
+ tools.appendChild(iconBtn("＋","add sub-task",()=>{ nd.children=nd.children||[]; nd.children.push(newNode()); nd.collapsed=false; save(); renderProject(); }));
+ tools.appendChild(iconBtn("◐","cycle status",()=>{ nd.flag=nd.flag==="none"?"progress":nd.flag==="progress"?"blocked":"none"; if(nd.flag!=="blocked") nd.reason=""; save(); renderProject(); renderNav(); }));
+ tools.appendChild(iconBtn("✕","delete",()=>{ siblings.splice(siblings.indexOf(nd),1); save(); renderProject(); renderNav(); }));
+ row.appendChild(tools);
+ node.appendChild(row);
+ if(nd.flag==="blocked"){
+   const r=el("div","blocked-reason");
+   r.innerHTML=`⛔ <span contenteditable="true" style="outline:none">${esc(nd.reason)||"why is it blocked?"}</span>`;
+   const span=r.querySelector("span");
+   span.addEventListener("focus",()=>{ if(!nd.reason) span.textContent=""; });
+   span.addEventListener("blur",()=>{ nd.reason=span.textContent.trim(); save(); });
+   node.appendChild(r);
+ }
+ if(hasKids&&!nd.collapsed){ const kids=el("div","children"); nd.children.forEach(k=>kids.appendChild(renderNode(k,nd.children))); node.appendChild(kids); }
+ return node;
+}
+function iconBtn(label,title,fn){ const b=el("button"); b.textContent=label; b.title=title; b.addEventListener("click",fn); return b; }
+function focusLast(wrap){ const all=wrap.querySelectorAll(".ntext"); const last=all[all.length-1]; if(last) last.focus(); }
+
+/* ---------------- misc ---------------- */
+function renderMisc(){
+ headerBits(false);
+ $("#mhTitle").textContent="miscellaneous";
+ $("#mhMeta").textContent=`${S.misc.length} quick${S.misc.length===1?"":""}`;
+ const wrap=$("#treeWrap"); wrap.innerHTML="";
+ const note=el("div","misc-note"); note.textContent="loose tasks that don't belong to a project. tick one and it's gone.";
+ wrap.appendChild(note);
+ const addRow=el("div","misc-add");
+ const inp=el("input"); inp.placeholder="add a quick task, press enter";
+ addRow.appendChild(inp); wrap.appendChild(addRow);
+ inp.addEventListener("keydown",e=>{ if(e.key==="Enter"&&inp.value.trim()){ S.misc.push({id:uid(),text:inp.value.trim()}); inp.value=""; save(); renderMisc(); renderNav(); setTimeout(()=>$("#treeWrap").querySelector(".misc-add input").focus(),0); } });
+ S.misc.forEach(m=>{
+   const it=el("div","misc-item");
+   const cb=el("div","cbox");
+   const tx=el("span"); tx.style.flex="1"; tx.textContent=m.text;
+   cb.addEventListener("click",()=>{ it.classList.add("gone"); setTimeout(()=>{ S.misc=S.misc.filter(x=>x.id!==m.id); save(); renderMisc(); renderNav(); },250); });
+   it.appendChild(cb); it.appendChild(tx); wrap.appendChild(it);
+ });
+ inp.focus();
+}
+
+/* ---------------- journal ---------------- */
+function renderJournal(){
+ headerBits(false);
+ $("#mhTitle").textContent="journal"; $("#mhMeta").textContent="everything you've saved";
+ const wrap=$("#treeWrap"); wrap.innerHTML="";
+ const note=el("div","save-note");
+ note.innerHTML="Your days are saved in this browser only. Clearing browser data, or opening Hanami on another device, starts empty, that's a limit of running in the browser. Use <b>copy backup</b> to keep a copy you control. The Windows build saves to a real file on your disk instead.";
+ wrap.appendChild(note);
+ const tools=el("div","jrnl-tools");
+ const bk=el("button","mini"); bk.textContent="copy backup (all data)";
+ bk.addEventListener("click",()=>{
+   const data=JSON.stringify(S,null,2);
+   if(navigator.clipboard&&navigator.clipboard.writeText){
+     navigator.clipboard.writeText(data).then(()=>nudge("backup copied","paste it into a file you keep. that's your safe copy.",false)).catch(()=>fallbackCopy(data));
+   } else fallbackCopy(data);
+ });
+ tools.appendChild(bk);
+ wrap.appendChild(tools);
+
+ const dates=Object.keys(S.logs).filter(d=>{const l=S.logs[d];return (l.shutdown&&l.shutdown.trim())||(l.drill&&l.drill.length);}).sort().reverse();
+ if(!dates.length){ const e=el("div","jrnl-empty"); e.textContent="no closed days yet. your shutdown notes and testing logs will appear here."; wrap.appendChild(e); return; }
+ dates.forEach(d=>{
+   const l=S.logs[d];
+   const card=el("div","jday");
+   const dd=new Date(d+"T00:00").toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"});
+   const tested=l.drill&&l.drill.length;
+   const h=el("div","jday-h");
+   h.innerHTML=`<span class="jday-date">${dd}</span><span class="jday-test ${tested?"yes":"no"}">${tested?"tested ✓":"no testing"}</span>`;
+   card.appendChild(h);
+   if(l.shutdown&&l.shutdown.trim()){ const did=el("div","jday-did"); did.textContent=l.shutdown; card.appendChild(did); }
+   if(tested){
+     const cols=el("div","jday-cols");
+     [["knew","knew it cold"],["shaky","shaky"],["no","didn't know"]].forEach(([k,lab])=>{
+       const col=el("div","jcol "+k);
+       col.innerHTML=`<div class="jcol-h">${lab}</div>`;
+       const items=l.drill.filter(x=>x.verdict===k);
+       if(items.length) items.forEach(x=>{ const i=el("div","jcol-item"); i.textContent="· "+x.item; col.appendChild(i); });
+       else { const i=el("div","jcol-item"); i.textContent="—"; col.appendChild(i); }
+       cols.appendChild(col);
+     });
+     card.appendChild(cols);
+   }
+   wrap.appendChild(card);
+ });
+}
+function fallbackCopy(txt){
+ const ta=document.createElement("textarea"); ta.value=txt; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
+ try{ document.execCommand("copy"); nudge("backup copied","paste it into a file you keep.",false); }catch(e){ nudge("couldn't copy","select the text manually to back up.",true); }
+ ta.remove();
+}
+
+function renderTestStatus(){
+ const tested=(S.logs[todayStr()]&&S.logs[todayStr()].drill&&S.logs[todayStr()].drill.length)?true:false;
+ const s=$("#testStatus");
+ s.innerHTML=`<span class="pdot" style="background:${tested?"var(--ok)":"var(--branch-dim)"}"></span><span style="color:${tested?"var(--ok)":"var(--ink-faint)"}">${tested?"today's testing: done":"today's testing: not yet"}</span>`;
+ const btn=$("#drillBtn"); btn.classList.toggle("done",tested); btn.textContent=tested?"testing logged ✓ (edit)":"log today's testing";
+}
+function renderAll(){ renderNav(); renderMain(); renderTestStatus(); updatePomoUI(); }
+
+/* ---------------- timers ---------------- */
+let pomo={phase:"idle",left:0,running:false};
+let hyd={left:0}, eye={left:0}, tickInt=null, meetingPaused=false, breakCheckTimer=null;
+function startTimers(){
+ pomo.left=S.settings.work*60; hyd.left=S.settings.hyd*60; eye.left=S.settings.eye*60;
+ if(tickInt) clearInterval(tickInt); tickInt=setInterval(tick,1000);
+ updatePomoUI(); updateNudgeUI(); probeNotif();
+}
+function probeNotif(){
+ const stat=$("#notifStat");
+ if(window.hanamiAPI){ stat.textContent="desktop notifications on"; return; }
+ if(!("Notification" in window)){ stat.textContent="this browser blocks desktop notifications. in-app only here; the Windows build reaches you when hidden."; return; }
+ if(Notification.permission==="granted"){ stat.textContent="desktop notifications on"; return; }
+ if(Notification.permission==="denied"){ stat.textContent="desktop notifications blocked by browser. in-app only here."; return; }
+ Notification.requestPermission().then(p=>{ stat.textContent=p==="granted"?"desktop notifications on":"running in-app only here. the Windows build reaches you when hidden."; }).catch(()=>{ stat.textContent="in-app nudges only in this browser."; });
+}
+function tick(){
+ if(meetingPaused) return;
+ if(pomo.running){ pomo.left--; if(pomo.left<=0) pomoPhaseEnd(); updatePomoUI(); }
+ hyd.left--; if(hyd.left<=0){ nudge("💧 hydrate","a sip of water. 30 minutes passed.",false); hyd.left=S.settings.hyd*60; }
+ eye.left--; if(eye.left<=0){ nudge("👁 rest your eyes","look 20 feet away for 20 seconds.",false); eye.left=S.settings.eye*60; }
+ updateNudgeUI();
+}
+function pomoPhaseEnd(){
+ if(pomo.phase==="work"){
+   pomo.phase="break"; pomo.left=S.settings.brk*60;
+   nudge("🌸 break time",`${S.settings.brk} minutes. step away from the screen.`,true);
+   breakCheckTimer=setTimeout(()=>{ nudge("still there?","are you sure you actually stopped?",true); },60000);
+ } else { pomo.phase="work"; pomo.left=S.settings.work*60; nudge("back to it",`${S.settings.work}-minute focus block started.`,false); }
+}
+function updatePomoUI(){
+ const m=Math.floor(Math.max(pomo.left,0)/60), s=Math.max(pomo.left,0)%60;
+ $("#pomoTime").textContent=`${m}:${String(s).padStart(2,"0")}`;
+ const ph=$("#pomoPhase"); ph.className="pomo-phase"+(pomo.phase==="break"?" break":"");
+ ph.textContent=pomo.phase==="idle"?"ready when you are":pomo.phase==="work"?(pomo.running?"focus":"paused"):(pomo.running?"break":"paused");
+ const b=$("#pomoBtns"); b.innerHTML="";
+ if(pomo.phase==="idle") b.appendChild(miniBtn("start focus","go",()=>{ pomo.phase="work"; pomo.left=S.settings.work*60; pomo.running=true; updatePomoUI(); }));
+ else {
+   b.appendChild(miniBtn(pomo.running?"pause":"resume","",()=>{ pomo.running=!pomo.running; updatePomoUI(); }));
+   b.appendChild(miniBtn("+5 min","",()=>{ pomo.left+=300; updatePomoUI(); }));
+   b.appendChild(miniBtn("reset","",()=>{ clearTimeout(breakCheckTimer); pomo={phase:"idle",left:S.settings.work*60,running:false}; updatePomoUI(); }));
+ }
+}
+function miniBtn(txt,cls,fn){ const x=el("button","mini"+(cls?" "+cls:"")); x.textContent=txt; x.addEventListener("click",fn); return x; }
+function updateNudgeUI(){
+ const f=x=>`in ${Math.floor(x/60)}:${String(x%60).padStart(2,"0")}`;
+ $("#hydNx").textContent=meetingPaused?"paused":f(Math.max(hyd.left,0));
+ $("#eyeNx").textContent=meetingPaused?"paused":f(Math.max(eye.left,0));
+ $("#hydDot").className="dot"+(meetingPaused?" off":""); $("#eyeDot").className="dot"+(meetingPaused?" off":"");
+}
+function nudge(title,body,amber){
+ const wrap=$("#toasts"); const t=el("div","toast"+(amber?" amber":""));
+ t.innerHTML=`<div class="toast-t">${esc(title)}</div><div class="toast-b">${esc(body)}</div>`;
+ const act=el("div","toast-act"); const ok=el("button","mini"); ok.textContent="ok"; ok.addEventListener("click",()=>t.remove());
+ act.appendChild(ok); t.appendChild(act); wrap.appendChild(t);
+ setTimeout(()=>{ if(t.parentNode) t.remove(); }, amber?20000:9000);
+ try{ if(window.hanamiAPI){ window.hanamiAPI.notify(title,body); } else if("Notification" in window && Notification.permission==="granted"){ new Notification(title,{body}); } }catch(e){}
+}
+
+/* ---------------- modals ---------------- */
+function openModal(html){ $("#modalCard").innerHTML=html; $("#modal").style.display="flex"; }
+function closeModal(){ $("#modal").style.display="none"; if(closePetals){ closePetals.stop(); closePetals=null; const c=$("#closePetals"); if(c){ const x=c.getContext("2d"); if(x) x.clearRect(0,0,c.width,c.height); } } }
+$("#modal").addEventListener("click",e=>{ if(e.target.id==="modal") closeModal(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeModal(); closeZen(); } });
+
+$("#shutdownBtn").addEventListener("click",()=>{
+ const log=S.logs[todayStr()]||{};
+ openModal(`
+   <div class="modal-top"><button class="modal-back" id="mBack">←</button><div class="modal-h">closing the day</div></div>
+   <div class="modal-sub">what did you actually do today? write it freely. it's saved to your journal, and open threads carry into tomorrow.</div>
+   <textarea class="ta" id="sdText" placeholder="today I...">${esc(log.shutdown||"")}</textarea>
+   <div class="modal-foot"><button class="btn" id="sdCancel">not yet</button><button class="btn btn-solid" id="sdSave">done for today</button></div>`);
+ $("#mBack").addEventListener("click",closeModal);
+ $("#sdCancel").addEventListener("click",closeModal);
+ $("#sdSave").addEventListener("click",()=>{
+   const d=todayStr(); S.logs[d]=S.logs[d]||{}; S.logs[d].shutdown=$("#sdText").value.trim(); save();
+   showCloser();
+ });
+});
+function showCloser(){
+ const line=CLOSERS[Math.floor(Math.random()*CLOSERS.length)];
+ const tree=buildTree(300,180,3).inner;
+ openModal(`<div style="text-align:center;padding:8px 6px 14px">
+   <svg class="close-tree" viewBox="0 0 300 190" aria-hidden="true">${tree}</svg>
+   <div class="modal-h" style="margin-bottom:12px">${esc(line)}</div>
+   <div class="modal-sub" style="margin-bottom:20px">saved to your journal. see it any time under journal.</div>
+   <button class="btn btn-solid" id="closerOk">goodnight</button>
+ </div>`);
+ if(closePetals) closePetals.stop();
+ closePetals=makePetals($("#closePetals"));
+ $("#closerOk").addEventListener("click",()=>{ closeModal(); renderTestStatus(); openGate(); });
+}
+
+$("#drillBtn").addEventListener("click",()=>{
+ const d=todayStr(); const log=S.logs[d]||{}; let items=(log.drill||[]).slice();
+ const buckets={knew:[],shaky:[],no:[]};
+ items.forEach(x=>{ if(buckets[x.verdict]) buckets[x.verdict].push(x.item); });
+ const col=(k,lab)=>`<div class="dcol ${k}"><div class="dcol-h">${lab}</div>
+     <textarea data-k="${k}" placeholder="paste or type, one per line"></textarea>
+     <button class="dcol-add" data-add="${k}">add to ${lab.split(" ")[0]}</button>
+     <div class="dchips" data-chips="${k}" style="margin-top:8px"></div></div>`;
+ openModal(`
+   <div class="modal-top"><button class="modal-back" id="mBack">←</button><div class="modal-h">daily testing</div></div>
+   <div class="modal-sub">three columns. paste or type your verdicts into each, one item per line, then add.</div>
+   <div class="drill-cols">${col("knew","knew it cold")}${col("shaky","shaky, revise")}${col("no","didn't know")}</div>
+   <div class="modal-foot"><button class="btn" id="diCancel">cancel</button><button class="btn btn-solid" id="diSave">save log</button></div>`);
+ function drawChips(){
+   ["knew","shaky","no"].forEach(k=>{
+     const box=$(`[data-chips="${k}"]`); box.innerHTML="";
+     buckets[k].forEach((t,i)=>{ const c=el("div","dchip"); const s=el("span"); s.textContent=t; const x=el("button"); x.textContent="✕"; x.addEventListener("click",()=>{ buckets[k].splice(i,1); drawChips(); }); c.appendChild(s); c.appendChild(x); box.appendChild(c); });
+   });
+ }
+ drawChips();
+ $("#modalCard").querySelectorAll("[data-add]").forEach(btn=>btn.addEventListener("click",()=>{
+   const k=btn.dataset.add; const ta=$(`textarea[data-k="${k}"]`);
+   ta.value.split("\n").map(s=>s.trim()).filter(Boolean).forEach(line=>buckets[k].push(line));
+   ta.value=""; drawChips();
+ }));
+ $("#mBack").addEventListener("click",closeModal);
+ $("#diCancel").addEventListener("click",closeModal);
+ $("#diSave").addEventListener("click",()=>{
+   const drill=[];
+   ["knew","shaky","no"].forEach(k=>buckets[k].forEach(item=>drill.push({item,verdict:k})));
+   S.logs[d]=S.logs[d]||{}; S.logs[d].drill=drill; save(); closeModal(); renderTestStatus(); renderNav();
+   if(S.selected==="journal") renderJournal();
+ });
+});
+
+$("#openSettings").addEventListener("click",()=>{
+ openModal(`
+   <div class="modal-top"><button class="modal-back" id="mBack">←</button><div class="modal-h">timer settings</div></div>
+   <div class="modal-sub">adjust the rhythm.</div>
+   <div class="set-row"><span>focus block (minutes)</span><input id="sWork" type="number" value="${S.settings.work}"></div>
+   <div class="set-row"><span>break (minutes)</span><input id="sBrk" type="number" value="${S.settings.brk}"></div>
+   <div class="set-row"><span>hydrate every (minutes)</span><input id="sHyd" type="number" value="${S.settings.hyd}"></div>
+   <div class="set-row"><span>rest eyes every (minutes)</span><input id="sEye" type="number" value="${S.settings.eye}"></div>
+   <div class="modal-foot"><button class="btn" id="setCancel">cancel</button><button class="btn btn-solid" id="setSave">save</button></div>`);
+ $("#mBack").addEventListener("click",closeModal);
+ $("#setCancel").addEventListener("click",closeModal);
+ $("#setSave").addEventListener("click",()=>{
+   S.settings.work=Math.max(1,+$("#sWork").value||40); S.settings.brk=Math.max(1,+$("#sBrk").value||10);
+   S.settings.hyd=Math.max(1,+$("#sHyd").value||30); S.settings.eye=Math.max(1,+$("#sEye").value||20);
+   save(); hyd.left=S.settings.hyd*60; eye.left=S.settings.eye*60; if(pomo.phase==="idle") pomo.left=S.settings.work*60;
+   closeModal(); updatePomoUI(); updateNudgeUI();
+ });
+});
+
+$("#meetingTog").addEventListener("click",()=>{
+ meetingPaused=!meetingPaused; $("#meetingTog").classList.toggle("on",meetingPaused);
+ $("#meetingTog").textContent=meetingPaused?"nudges paused — resume":"pause all nudges (meeting)"; updateNudgeUI();
+});
+$("#addProj").addEventListener("click",()=>{ const p={id:uid(),name:"new project",leftOff:"",nodes:[]}; S.projects.push(p); go(p.id); });
+$("#pinMisc").addEventListener("click",()=>go("misc"));
+$("#pinJournal").addEventListener("click",()=>go("journal"));
+$("#backBtn").addEventListener("click",back);
+$("#zenOpen").addEventListener("click",openZen);
+$("#zenBack").addEventListener("click",closeZen);
+$("#mhTitle").addEventListener("dblclick",()=>{ const p=curProj(); if(!p) return; const nv=prompt("rename project",p.name); if(nv&&nv.trim()){ p.name=nv.trim(); save(); renderAll(); } });
+
+/* ---------------- boot ---------------- */
+openGate();

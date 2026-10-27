@@ -1,0 +1,42 @@
+{
+  "name": "hanami",
+  "productName": "Hanami",
+  "version": "1.0.0",
+  "description": "A cherry-blossom productivity companion: morning ritual, project tree, pomodoro and nudges, daily testing log.",
+  "main": "main.js",
+  "author": "Tulsi Chaudhari",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "31.7.7",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.tulsi.hanami",
+    "productName": "Hanami",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hanami"
+    }
+  }
+}

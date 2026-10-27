@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hanami</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="gate">
+  <div class="gate-bg"><canvas id="gatePetals"></canvas><svg class="gate-tree" id="gateTree" aria-hidden="true"></svg></div>
+  <div class="gate-card" id="gateInner"></div>
+</div>
+
+<div id="app">
+  <div class="shell">
+    <nav class="nav">
+      <div class="nav-top"><div class="nav-logo">花見 <span>hanami</span></div><button class="zen-open" id="zenOpen" title="just the blossoms" aria-label="blossom view">🌸</button></div>
+      <div class="pinned">
+        <div class="pin" id="pinMisc"><span>🗒</span> miscellaneous <span class="pc" id="miscCount"></span></div>
+        <div class="pin" id="pinJournal"><span>📓</span> journal <span class="pdot" id="jrnlDot"></span></div>
+      </div>
+      <div class="nav-cap">projects</div>
+      <div class="nav-scroll" id="navScroll">
+        <svg class="nav-svg" id="navSvg" width="256" height="400" aria-hidden="true"></svg>
+        <div class="proj-list" id="projList"></div>
+      </div>
+      <div class="nav-foot">
+        <button class="add-proj" id="addProj">+ new project</button>
+        <div class="notif-stat" id="notifStat"></div>
+      </div>
+    </nav>
+
+    <main class="main">
+      <div class="main-head">
+        <div class="mh-row">
+          <button class="back" id="backBtn" aria-label="back">←</button>
+          <div class="mh-title" id="mhTitle">—</div>
+          <div class="mh-meta" id="mhMeta"></div>
+        </div>
+        <div class="leftoff" id="leftOffWrap">
+          <span class="leftoff-lab">left off</span>
+          <input class="leftoff-txt" id="leftOff" placeholder="what were you mid-thought on?">
+        </div>
+      </div>
+      <div class="tree-wrap" id="treeWrap"></div>
+    </main>
+
+    <aside class="rail">
+      <div class="rail-sec">
+        <div class="rail-h">pomodoro <button class="gear" id="openSettings" aria-label="timer settings">⚙</button></div>
+        <div class="pomo-time" id="pomoTime">40:00</div>
+        <div class="pomo-phase" id="pomoPhase">ready when you are</div>
+        <div class="pomo-btns" id="pomoBtns"></div>
+        <button class="meeting-tog" id="meetingTog">pause all nudges (meeting)</button>
+      </div>
+      <div class="rail-sec">
+        <div class="rail-h">gentle nudges</div>
+        <div class="timer-row"><span><span class="dot" id="hydDot"></span>hydrate</span><span class="nx" id="hydNx">in 30:00</span></div>
+        <div class="timer-row"><span><span class="dot" id="eyeDot"></span>rest eyes</span><span class="nx" id="eyeNx">in 20:00</span></div>
+      </div>
+      <div class="rail-sec">
+        <div class="rail-h">daily testing</div>
+        <div class="test-status" id="testStatus"></div>
+        <button class="drill-btn" id="drillBtn">log today's testing</button>
+      </div>
+      <div class="rail-sec" style="margin-top:auto;border-bottom:none">
+        <button class="shutdown" id="shutdownBtn">I'm done for today</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div id="zen">
+  <canvas id="zenPetals"></canvas>
+  <svg class="zen-tree" id="zenTree" aria-hidden="true"></svg>
+  <button class="zen-back" id="zenBack">← back</button>
+  <div class="zen-cap">breathe</div>
+</div>
+
+<div id="toasts"></div>
+<div id="modal"><canvas id="closePetals"></canvas><div class="modal-card" id="modalCard"></div></div>
+<script src="app.js"></script>
+</body>
+</html>
