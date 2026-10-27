@@ -1,2 +1,0 @@
-# hanami
-my productivity app
