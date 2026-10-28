@@ -2,9 +2,18 @@
 // Owns the window, the tray, durable file storage, and native notifications
 // that fire even when the window is hidden or minimised.
 
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, nativeImage } = require("electron");
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, nativeImage, powerMonitor } = require("electron");
 const path = require("path");
 const fs = require("fs");
+
+// Reload the window's renderer safely (used to recover from a sleep/wake freeze).
+function safeReload(reason) {
+  try {
+    if (win && !win.isDestroyed() && win.webContents) {
+      win.webContents.reload();
+    }
+  } catch (e) {}
+}
 
 // ---- durable storage: a real JSON file on disk -------------------------------
 // Lives at  %APPDATA%\Hanami\hanami-data.json  on Windows.
@@ -81,6 +90,18 @@ function createWindow() {
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
 
+  // Ctrl+R / F5 reloads the window (manual recovery), even with no menu bar.
+  win.webContents.on("before-input-event", (e, input) => {
+    if (input.type === "keyDown" && ((input.control && input.key.toLowerCase() === "r") || input.key === "F5")) {
+      safeReload("manual");
+      e.preventDefault();
+    }
+  });
+
+  // If the renderer locks up, reload it instead of leaving a frozen window.
+  win.on("unresponsive", () => safeReload("unresponsive"));
+  win.webContents.on("render-process-gone", () => safeReload("process-gone"));
+
   // Closing the window hides it to the tray instead of quitting,
   // so timers and scheduled nudges keep running in the background.
   win.on("close", (e) => {
@@ -124,6 +145,13 @@ if (!gotLock) {
     createTray();
     // Launch at login by default. Turn off any time from the tray menu.
     app.setLoginItemSettings({ openAtLogin: true });
+
+    // Recover automatically after the machine sleeps/wakes or the screen unlocks,
+    // which is the common cause of a renderer freezing while the app sat idle.
+    try {
+      powerMonitor.on("resume", () => safeReload("resume"));
+      powerMonitor.on("unlock-screen", () => safeReload("unlock"));
+    } catch (e) {}
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
