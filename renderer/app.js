@@ -52,8 +52,16 @@ function seed(){
   logs:{}
  };
 }
+// Native (Electron) exposes window.HANAMI_INIT (saved data) and window.hanamiAPI.
+// On the web those are undefined and we fall back to localStorage. One codebase, no build-time patching.
+const NATIVE = typeof window!=="undefined" && !!window.hanamiAPI;
 let S;
-try{ if(window.HANAMI_INIT){ S=window.HANAMI_INIT; } else { const raw=localStorage.getItem(KEY); S=raw?JSON.parse(raw):seed(); } }catch(e){ S=seed(); }
+try{
+  let raw=null;
+  if(typeof window!=="undefined" && window.HANAMI_INIT) raw=window.HANAMI_INIT;
+  else { try{ const r=localStorage.getItem(KEY); raw=r?JSON.parse(r):null; }catch(e){} }
+  S=normalizeState(raw);
+}catch(e){ S=seed(); }
 // Normalize any saved shape so no missing field can ever break a render.
 function normalizeState(s){
  if(!s||typeof s!=="object") s=seed();
@@ -80,8 +88,7 @@ function normalizeState(s){
  if(!s.selected && s.projects[0]) s.selected=s.projects[0].id;
  return s;
 }
-S=normalizeState(S);
-function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} try{ if(window.hanamiAPI) window.hanamiAPI.save(S); }catch(e){} }
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} try{ if(NATIVE) window.hanamiAPI.save(S); }catch(e){} }
 
 const $=s=>document.querySelector(s);
 const el=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e;};
@@ -522,7 +529,7 @@ function startTimers(){
 }
 function probeNotif(){
  const stat=$("#notifStat");
- if(window.hanamiAPI){ stat.textContent="desktop notifications on"; return; }
+ if(NATIVE){ stat.textContent="desktop notifications on"; return; }
  if(!("Notification" in window)){ stat.textContent="this browser blocks desktop notifications. in-app only here; the Windows build reaches you when hidden."; return; }
  if(Notification.permission==="granted"){ stat.textContent="desktop notifications on"; return; }
  if(Notification.permission==="denied"){ stat.textContent="desktop notifications blocked by browser. in-app only here."; return; }
@@ -576,7 +583,7 @@ function nudge(title,body,amber){
  const act=el("div","toast-act"); const ok=el("button","mini"); ok.textContent="ok"; ok.addEventListener("click",()=>t.remove());
  act.appendChild(ok); t.appendChild(act); wrap.appendChild(t);
  setTimeout(()=>{ if(t.parentNode) t.remove(); }, amber?20000:9000);
- try{ if(window.hanamiAPI){ window.hanamiAPI.notify(title,body); } else if("Notification" in window && Notification.permission==="granted"){ new Notification(title,{body}); } }catch(e){}
+ try{ if(NATIVE){ window.hanamiAPI.notify(title,body); } else if("Notification" in window && Notification.permission==="granted"){ new Notification(title,{body}); } }catch(e){}
 }
 
 /* ---------------- modals ---------------- */

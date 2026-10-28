@@ -8,7 +8,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win --publish never"
+    "dist": "electron-builder --win portable --publish never"
   },
   "devDependencies": {
     "electron": "31.7.7",
@@ -27,16 +27,11 @@
       "assets/**/*"
     ],
     "win": {
-      "target": "nsis",
+      "target": "portable",
       "icon": "assets/icon.ico"
     },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Hanami"
+    "portable": {
+      "artifactName": "Hanami.exe"
     }
   }
 }
