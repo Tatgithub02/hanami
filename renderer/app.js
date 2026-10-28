@@ -54,15 +54,33 @@ function seed(){
 }
 let S;
 try{ if(window.HANAMI_INIT){ S=window.HANAMI_INIT; } else { const raw=localStorage.getItem(KEY); S=raw?JSON.parse(raw):seed(); } }catch(e){ S=seed(); }
-// migrate older saves
-if(!Array.isArray(S.misc)) S.misc=[];
-if(!Array.isArray(S.brainDump)) S.brainDump=[];
-if(!S.garden||typeof S.garden!=="object") S.garden={date:null,flowers:[]};
-if(!S.logs) S.logs={};
-if(!S.settings) S.settings={work:40,brk:10,hyd:30,eye:20,autoBreak:true};
-if(S.settings.autoBreak===undefined) S.settings.autoBreak=true;
-if(!Array.isArray(S.projects)) S.projects=[];
-if(!S.selected && S.projects[0]) S.selected=S.projects[0].id;
+// Normalize any saved shape so no missing field can ever break a render.
+function normalizeState(s){
+ if(!s||typeof s!=="object") s=seed();
+ if(!Array.isArray(s.misc)) s.misc=[];
+ if(!Array.isArray(s.brainDump)) s.brainDump=[];
+ if(!s.garden||typeof s.garden!=="object"||!Array.isArray(s.garden.flowers)) s.garden={date:null,flowers:[]};
+ if(!s.logs||typeof s.logs!=="object") s.logs={};
+ if(!s.settings||typeof s.settings!=="object") s.settings={};
+ const sd=s.settings;
+ if(typeof sd.work!=="number") sd.work=40;
+ if(typeof sd.brk!=="number") sd.brk=10;
+ if(typeof sd.hyd!=="number") sd.hyd=30;
+ if(typeof sd.eye!=="number") sd.eye=20;
+ if(typeof sd.autoBreak!=="boolean") sd.autoBreak=true;
+ if(!Array.isArray(s.projects)) s.projects=[];
+ const fixNode=n=>{ if(!n||typeof n!=="object") return null;
+   if(!n.id) n.id=uid(); if(typeof n.text!=="string") n.text=""; n.done=!!n.done;
+   if(!n.flag) n.flag="none"; if(typeof n.reason!=="string") n.reason=""; n.collapsed=!!n.collapsed;
+   if(!Array.isArray(n.children)) n.children=[]; n.children=n.children.map(fixNode).filter(Boolean); return n; };
+ s.projects=s.projects.filter(p=>p&&typeof p==="object");
+ s.projects.forEach(p=>{ if(!p.id) p.id=uid(); if(typeof p.name!=="string") p.name="untitled"; if(typeof p.leftOff!=="string") p.leftOff=""; if(!Array.isArray(p.nodes)) p.nodes=[]; p.nodes=p.nodes.map(fixNode).filter(Boolean); });
+ s.misc=s.misc.filter(m=>m&&typeof m==="object"&&typeof m.text==="string");
+ s.brainDump=s.brainDump.filter(b=>b&&typeof b==="object"&&typeof b.text==="string");
+ if(!s.selected && s.projects[0]) s.selected=s.projects[0].id;
+ return s;
+}
+S=normalizeState(S);
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} try{ if(window.hanamiAPI) window.hanamiAPI.save(S); }catch(e){} }
 
 const $=s=>document.querySelector(s);
@@ -265,8 +283,8 @@ function renderNav(){
  $("#pinMisc").classList.toggle("sel",S.selected==="misc");
  $("#pinJournal").classList.toggle("sel",S.selected==="journal");
  $("#pinBrain").classList.toggle("sel",S.selected==="brain");
- $("#miscCount").textContent=S.misc.length?S.misc.length:"";
- $("#brainCount").textContent=S.brainDump.length?S.brainDump.length:"";
+ $("#miscCount").textContent=(S.misc||[]).length||"";
+ $("#brainCount").textContent=(S.brainDump||[]).length||"";
  const tested=(S.logs[todayStr()]&&S.logs[todayStr()].drill&&S.logs[todayStr()].drill.length)?true:false;
  $("#jrnlDot").style.background=tested?"var(--ok)":"var(--branch-dim)";
 
